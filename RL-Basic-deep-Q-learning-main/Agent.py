@@ -2,7 +2,7 @@
 """
 Created on Thu Nov  5 21:20:14 2020
 
-@author: Abdelhamid
+@author: Abdelhamid Bouzid
 """
 import torch as T
 from deepQlearning import deepQlearning
