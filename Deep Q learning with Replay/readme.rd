@@ -2,7 +2,7 @@
 
 Dueling Network Architectures for Deep Reinforcement Learning:
 
-"https://arxiv.org/abs/1511.06581"
+"https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf"
 
 This folder contains the implementation of dueling Deep Q learning.
 
