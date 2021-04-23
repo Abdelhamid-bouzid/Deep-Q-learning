@@ -6,7 +6,7 @@ Created on Wed Nov  4 21:34:24 2020
 """
 import numpy as np
 import torch as T
-from DuelDeepQnetwork import DuelDeepQnetwork
+from DeepQnetwork import DeepQnetwork
 from Buffer import Buffer
 
 class Agent(object):
@@ -29,46 +29,46 @@ class Agent(object):
         
         self.memory = Buffer(self.max_size, self.input_dims)
         
-        self.model = DuelDeepQnetwork(self.lr, self.n_actions, self.input_dims)
+        self.eval_model = DeepQnetwork(self.lr, self.n_actions, self.input_dims, self.check_dir, 'eval_model_0')
+        self.next_model = DeepQnetwork(self.lr, self.n_actions, self.input_dims, self.check_dir, 'next_model_0')
         
     def choose_action(self, state):
-        self.model.eval()
+        self.eval_model.eval()
         if np.random.random()> self.epsilon:
-            state   = T.from_numpy(np.array([state], copy=False, dtype=np.float32)).to(self.model.device)
-            actions = self.model.forward(state)
-            action     = T.argmax(actions).item()
+            state   = T.tensor([state],dtype=T.float).to(self.eval_model.device)
+            
+            actions = self.eval_model.forward(state)
+            action  = T.argmax(actions).item()
             
         else:
             possible_actions = [i for i in range(self.n_actions)]
             action           = np.random.choice(possible_actions)
-        self.model.train()    
+        self.eval_model.train()    
         return action
     
     def learn(self):
         if self.memory.current_mem < self.batch_size:
             return
         
-        self.model.optimizer.zero_grad()
+        self.eval_model.optimizer.zero_grad()
+        self.update_model_weights()
         
         indices = np.arange(self.batch_size)
         
         states, actions, rewards, n_states, terminal = self.sample_memory()
         
-        Q_pred       = self.model.forward(states)
-        N_Q_pred      = self.model.forward(n_states)
-        
-        max_actions   = T.argmax(N_Q_pred, dim=1)
-        N_Q_pred[terminal] = 0.0
-        
-        Q_pred   = Q_pred[indices,actions]
-        N_Q_pred = N_Q_pred[indices,max_actions]
+        '''##########################################################################################################'''
+        Q_n_state_next = self.next_model.forward(n_states)
+        n_max_actions  = T.argmax(Q_n_state_next, dim=1)
+        Q_n_state_next[terminal] = 0.0
         
         '''########################################### compute loss #################################################'''
-        truth    = rewards + self.gamma*N_Q_pred
-        loss           = self.model.loss(truth,Q_pred).to(self.model.device)
+        Q_state_pred   = self.eval_model.forward(states)[indices, actions]
+        Q_target       = rewards + self.gamma*Q_n_state_next[indices, n_max_actions]
+        loss           = self.eval_model.loss(Q_target,Q_state_pred).to(self.eval_model.device)
         loss.backward()
         
-        self.model.optimizer.step()
+        self.eval_model.optimizer.step()
         self.learn_step_cntr += 1
         
         self.decrement_epsilon()
@@ -76,7 +76,10 @@ class Agent(object):
     def decrement_epsilon(self):
         self.epsilon = self.epsilon - self.eps_dec \
                            if self.epsilon > self.eps_min else self.eps_min
-                        
+                               
+    def update_model_weights(self):
+        if (self.replace is not None) and (self.learn_step_cntr % self.replace ==0):
+            self.next_model.load_state_dict(self.eval_model.state_dict())
             
     def store_transitions(self, state, action, reward, n_state, done):
         self.memory.store_transitions(state, action, reward, n_state, done)
@@ -85,17 +88,19 @@ class Agent(object):
         
         states, actions, rewards, n_states, terminal = self.memory.sample_buffer(self.batch_size)
          
-        states    = T.tensor(states).to(self.model.device)
-        actions   = T.tensor(actions).to(self.model.device)
-        rewards   = T.tensor(rewards).to(self.model.device)
-        n_states  = T.tensor(n_states).to(self.model.device)
-        terminal  = T.tensor(terminal).to(self.model.device)
+        states    = T.tensor(states).to(self.eval_model.device)
+        actions   = T.tensor(actions).to(self.eval_model.device)
+        rewards   = T.tensor(rewards).to(self.eval_model.device)
+        n_states  = T.tensor(n_states).to(self.eval_model.device)
+        terminal  = T.tensor(terminal).to(self.eval_model.device)
         
         return states, actions, rewards, n_states, terminal
     
     def save_models(self):
-        self.model.save_checkpoint()
+        self.eval_model.save_checkpoint()
+        self.next_model.save_checkpoint()
 
     def load_models(self):
-        self.model.load_checkpoint()
+        self.eval_model.load_checkpoint()
+        self.next_model.load_checkpoint()
         

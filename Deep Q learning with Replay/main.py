@@ -4,6 +4,7 @@ Created on Wed Nov  4 23:23:53 2020
 
 @author: Abdelhamid 
 """
+
 import numpy as np
 from Agent import Agent
 from utils import make_env
@@ -13,7 +14,7 @@ if __name__ == '__main__':
     
     env             = make_env('PongNoFrameskip-v4')
     best_score      = -np.inf
-    n_games         = 1000
+    n_games         = 1000000
     
     input_dims1     = (env.observation_space.shape)
     n_actions1      = env.action_space.n
