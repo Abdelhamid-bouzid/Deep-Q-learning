@@ -58,19 +58,19 @@ class Agent(object):
         
         V_s, A       = self.eval_model.forward(states)
         N_V_s, N_A   = self.eval_model.forward(n_states)
-        N_V_s_next, N_A_next   = self.next_model.forward(n_states)
         
         Q_sa          = T.add(V_s, A - A.mean(dim=1, keepdim=True))[indices,actions]
-        
         N_Q_sa        = T.add(N_V_s, N_A - N_A.mean(dim=1, keepdim=True))
+        
         max_actions   = T.argmax(N_Q_sa, dim=1)
         N_Q_sa[terminal] = 0.0
         
+        N_V_s_next, N_A_next   = self.next_model.forward(n_states)
         N_Q_next = T.add(N_V_s_next, N_A_next - N_A_next.mean(dim=1, keepdim=True))[indices,max_actions]
         
         '''########################################### compute loss #################################################'''
         truth    = rewards + self.gamma*N_Q_next
-        loss           = self.eval_model.loss(truth,Q_sa).to(self.eval_model.device)
+        loss     = self.eval_model.loss(truth,Q_sa).to(self.eval_model.device)
         loss.backward()
         
         self.eval_model.optimizer.step()
